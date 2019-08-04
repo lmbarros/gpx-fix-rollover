@@ -18,6 +18,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -26,47 +27,79 @@ import (
 	"github.com/tkrajina/gpxgo/gpx"
 )
 
+const defaultOffset = "172032h" // 1024 weeks
+
 func main() {
 	fmt.Println("gpx-fix-rollover: Fixes the GPS week rollover issue in GPX files.")
-	fmt.Println("Licensed under the GNU GPL version 3 or later.")
+	fmt.Println("Licensed under the GNU GPL version 3 or later.\n")
+
+	// Command-line arguments
+	timeOffsetFlag := flag.String("offset", defaultOffset, "The time offset to add to add to each point. Accepts strings like '12h3m15s'. Default is 1024 weeks.")
+
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s <input-file.gpx> [flags]\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "Available flags:\n")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	if len(flag.Args()) != 1 {
+		flag.Usage()
+		return
+	}
+
+	timeOffset, err := time.ParseDuration(*timeOffsetFlag)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing duration %s: %s\n", timeOffsetFlag, err.Error())
+		return
+	}
+
+	inFile := flag.Arg(0)
+	backupFile := inFile + ".backup"
+	outFile := inFile
+
+	if _, err := os.Stat(backupFile); err == nil {
+		fmt.Fprintf(os.Stderr, "Backup file %s already exists.\n", backupFile)
+		return
+	} else if !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Cannot create backup file %s: %s\n", backupFile, err.Error())
+		return
+	}
+
+	// Do the job!
 	fmt.Println("Working...")
 
-	const inFile = "20190528-191450.gpx"
-	const outFile = "result.gpx"
-	const deltaTimeDurationString = "172032h" // 1024 weeks
-
-	deltaTime, err := time.ParseDuration(deltaTimeDurationString)
+	gpxFile, err := gpx.ParseFile(inFile)
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing duration %s: %s", deltaTimeDurationString, err.Error())
+		fmt.Fprintf(os.Stderr, "Error parsing file %s: %s\n", inFile, err.Error())
 		return
 	}
 
-	gpxBytes, err := ioutil.ReadFile(inFile)
+	gpxFile.ExecuteOnAllPoints(func(p *gpx.GPXPoint) { p.Timestamp = p.Timestamp.Add(timeOffset) })
+
+	err = os.Rename(inFile, backupFile)
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading file %s: %s", inFile, err.Error())
+		fmt.Fprintf(os.Stderr, "Error backing the GPX file up: %s\n", err.Error())
 		return
 	}
 
-	// TODO: use ParseFile
-	gpxFile, err := gpx.ParseBytes(gpxBytes)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing file %s: %s", inFile, err.Error())
-		return
-	}
-
-	gpxFile.ExecuteOnAllPoints(func(p *gpx.GPXPoint) { p.Timestamp = p.Timestamp.Add(deltaTime) })
-
-	// When ready, you can write the resulting GPX file:
 	xmlBytes, err := gpxFile.ToXml(gpx.ToXmlParams{Version: "1.1", Indent: true})
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing to file %s: %s", outFile, err.Error())
+		fmt.Fprintf(os.Stderr, "Error generating output GPX: %s\n", err.Error())
 		return
 	}
 
-	ioutil.WriteFile(outFile, xmlBytes, 0644)
+	err = ioutil.WriteFile(outFile, xmlBytes, 0644)
 
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing to output file %s: %s\n", outFile, err.Error())
+		return
+	}
+
+	// All done! Be nice end exit.
 	fmt.Println("Done! Have a nice day!")
 }
