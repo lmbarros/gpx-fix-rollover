@@ -1,4 +1,4 @@
-// gpx_fix_rollover: Fixes the GPS week rollover issue in GPC files
+// gpx-fix-rollover: Fixes the GPS week rollover issue in GPC files
 //
 // Copyright (C) 2019  Leandro Motta Barros
 //
@@ -27,7 +27,7 @@ import (
 )
 
 func main() {
-	fmt.Println("gpx_fix_rollover: Fixes the GPS week rollover issue in GPX files.")
+	fmt.Println("gpx-fix-rollover: Fixes the GPS week rollover issue in GPX files.")
 	fmt.Println("Licensed under the GNU GPL version 3 or later.")
 	fmt.Println("Working...")
 
